@@ -1,0 +1,6 @@
+# Python dependencies for SUSE PagerDuty Demo Log Generator
+# Note: These may already be installed on your system
+
+requests>=2.31.0
+pyyaml>=6.0.1
+python-dotenv>=1.0.0

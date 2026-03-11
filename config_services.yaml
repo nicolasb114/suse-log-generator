@@ -1,0 +1,240 @@
+loki:
+  url: "${LOKI_URL:-http://localhost:3100}"
+
+services:
+  rmt-registration:
+    enabled: true
+    rate_per_minute: 20
+    instances:
+      - "rmt-gce-1-us-east4-b"
+      - "rmt-ec2-1-me-central-1c"
+      - "rmt-azure-1-westus2-a"
+    log_patterns:
+      - level: "FATAL"
+        weight: 5
+        templates:
+          - "Database connection pool exhausted. Max connections: 100, Active: 100"
+          - "Out of memory error. Heap size: 2048MB, Used: {used}MB"
+          - "Unable to reach authentication service at auth.suse.internal:8443. Connection timeout after 30s"
+          - "Critical: Registration service crashed. Core dump generated at /var/crash/registration-{timestamp}.dump"
+        attributes:
+          used: [2045, 2046, 2047]
+          timestamp: [1710158625, 1710158626, 1710158627]
+
+      - level: "ERROR"
+        weight: 10
+        templates:
+          - "HTTP 500: NullPointerException in RegistrationController.create_account (line 247)"
+          - "HTTP 500: Request timeout. Upstream service took >{timeout}s to respond"
+          - "HTTP 500: Invalid product ID format. Expected UUID, got: '{product_id}'"
+          - "HTTP 500: Database query failed. Connection lost to primary database"
+          - "HTTP 500: Configuration key 'registration.max_retries' not found in environment"
+        attributes:
+          timeout: [60, 90, 120]
+          product_id: ["prod_12345", "prod_abc", "12345"]
+
+      - level: "WARN"
+        weight: 15
+        templates:
+          - "Slow database query detected. Duration: {duration}ms. Query: SELECT * FROM registrations WHERE..."
+          - "Rate limit approaching for IP: {ip}. Current: {current}/100 requests"
+          - "Deprecated API endpoint accessed: /api/v1/legacy/register. Use /api/v2/register instead"
+          - "High memory usage detected: {memory}% of available heap"
+        attributes:
+          duration: [1500, 2000, 3000, 4500]
+          ip: ["192.168.1.100", "10.0.0.50", "172.16.0.25"]
+          current: [85, 90, 95]
+          memory: [75, 80, 85]
+
+      - level: "INFO"
+        weight: 70
+        templates:
+          - "Customer registration completed successfully. ID: {customer_id}, Duration: {duration}ms"
+          - "Request processed: POST /api/v2/register - Status: 201 - {duration}ms"
+          - "New customer onboarded: {customer_id}. Products: {product_count}"
+          - "Registration validation passed for customer: {customer_id}"
+        attributes:
+          customer_id: ["cust_001", "cust_002", "cust_003", "cust_004", "cust_005"]
+          duration: [45, 120, 250, 380]
+          product_count: [1, 2, 3, 5]
+
+  rmt-api:
+    enabled: true
+    rate_per_minute: 30
+    instances:
+      - "rmt-gce-2-us-east4-b"
+      - "rmt-ec2-2-me-central-1c"
+      - "rmt-azure-2-westus2-a"
+    log_patterns:
+      - level: "FATAL"
+        weight: 5
+        templates:
+          - "Critical: API gateway unreachable. All endpoints down. Last successful health check: {minutes} minutes ago"
+          - "Memory leak detected. Process will be terminated. Memory growth rate: {rate}MB/min"
+          - "Fatal: Redis connection pool exhausted. Unable to serve requests"
+          - "Panic: Unrecoverable error in request handler. Stack trace logged"
+        attributes:
+          minutes: [5, 10, 15]
+          rate: [50, 75, 100]
+
+      - level: "ERROR"
+        weight: 10
+        templates:
+          - "HTTP 500: Internal server error in ProductController.list (line {line})"
+          - "HTTP 500: Configuration key 'api.rate_limit' not found in environment"
+          - "HTTP 500: Failed to parse request body. Invalid JSON at position {position}"
+          - "HTTP 500: Upstream service returned 503. Service: {service}"
+          - "HTTP 500: Database transaction rollback failed. Data may be inconsistent"
+        attributes:
+          line: [142, 256, 389, 421]
+          position: [45, 123, 567]
+          service: ["auth-service", "product-service", "billing-service"]
+
+      - level: "WARN"
+        weight: 10
+        templates:
+          - "Deprecated API endpoint accessed: /api/v1/legacy/products. Client: {client}"
+          - "API rate limit exceeded for key: {api_key}. Requests: {requests}/1000"
+          - "Slow API response: GET /api/v2/products/{product_id} took {duration}ms"
+          - "Cache miss for frequently accessed resource: {resource}"
+        attributes:
+          client: ["mobile-app-v1.2", "web-portal-v2.0", "cli-tool-v0.9"]
+          api_key: ["key_abc123", "key_xyz789", "key_def456"]
+          requests: [1050, 1100, 1250]
+          product_id: ["prod_001", "prod_002", "prod_003"]
+          duration: [2000, 3000, 4000]
+          resource: ["product_catalog", "user_preferences", "pricing_data"]
+
+      - level: "INFO"
+        weight: 75
+        templates:
+          - "API request: GET /api/v2/products - Status: 200 - {duration}ms"
+          - "API request: POST /api/v2/subscriptions - Status: 201 - {duration}ms"
+          - "API request: PUT /api/v2/products/{product_id} - Status: 200 - {duration}ms"
+          - "API request: DELETE /api/v2/subscriptions/{sub_id} - Status: 204 - {duration}ms"
+          - "Health check passed. All dependencies healthy"
+        attributes:
+          duration: [30, 80, 150, 220]
+          product_id: ["prod_001", "prod_002", "prod_003"]
+          sub_id: ["sub_001", "sub_002", "sub_003"]
+
+  rmt-sync:
+    enabled: true
+    rate_per_minute: 15
+    instances:
+      - "rmt-gce-3-us-east4-b"
+      - "rmt-ec2-3-me-central-1c"
+    log_patterns:
+      - level: "FATAL"
+        weight: 5
+        templates:
+          - "Failed to sync package repository. Mirror unreachable: repo.suse.com/updates. Retries exhausted"
+          - "Repository signature validation failed. Aborting sync. Invalid signature for: {repo}"
+          - "Critical: Disk space insufficient for sync. Required: {required}GB, Available: {available}GB"
+          - "Fatal: Sync process crashed. Exit code: {exit_code}"
+        attributes:
+          repo: ["SLES15-SP4", "SLES12-SP5", "openSUSE-Leap-15.4"]
+          required: [50, 75, 100]
+          available: [10, 15, 20]
+          exit_code: [1, 2, 139]
+
+      - level: "ERROR"
+        weight: 10
+        templates:
+          - "HTTP 500: Sync job failed. Disk space insufficient. Path: /var/lib/rmt/repo"
+          - "HTTP 500: Package checksum mismatch for package: {package}. Expected: {expected}, Got: {actual}"
+          - "HTTP 500: Failed to download package: {package}. HTTP status: {status}"
+          - "HTTP 500: Repository metadata parsing failed. Invalid XML in repomd.xml"
+        attributes:
+          package: ["kernel-5.14.21", "glibc-2.31", "systemd-249", "python3-3.9.7"]
+          expected: ["abc123", "def456", "ghi789"]
+          actual: ["xyz999", "uvw888", "rst777"]
+          status: [404, 503, 504]
+
+      - level: "WARN"
+        weight: 10
+        templates:
+          - "Sync taking longer than expected. Current duration: {duration}s. Repository: {repo}"
+          - "Mirror response slow. Latency: {latency}ms. Consider switching mirror"
+          - "Package download retry attempt {attempt}/3 for: {package}"
+          - "Repository size increased significantly. Previous: {prev}GB, Current: {current}GB"
+        attributes:
+          duration: [300, 450, 600, 900]
+          repo: ["SLES15-SP4", "SLES12-SP5", "openSUSE-Leap"]
+          latency: [1500, 2000, 3000]
+          attempt: [1, 2, 3]
+          package: ["kernel-default", "glibc", "systemd"]
+          prev: [45, 50, 55]
+          current: [60, 65, 70]
+
+      - level: "INFO"
+        weight: 75
+        templates:
+          - "Repository sync completed. Packages synced: {count}. Duration: {duration}s"
+          - "Sync job started for repository: {repo}. Estimated time: {estimate} minutes"
+          - "Package downloaded successfully: {package}. Size: {size}MB"
+          - "Repository metadata updated. Last modified: {timestamp}"
+        attributes:
+          count: [150, 320, 500, 750]
+          duration: [120, 180, 240]
+          repo: ["SLES15-SP4", "SLES12-SP5", "openSUSE-Leap-15.4"]
+          estimate: [15, 30, 45]
+          package: ["kernel-default", "glibc", "systemd", "python3"]
+          size: [5, 15, 25, 50]
+          timestamp: ["2026-03-11T10:00:00Z", "2026-03-11T11:00:00Z"]
+
+  rmt-auth:
+    enabled: true
+    rate_per_minute: 25
+    instances:
+      - "rmt-gce-4-us-east4-b"
+      - "rmt-azure-3-westus2-a"
+    log_patterns:
+      - level: "FATAL"
+        weight: 5
+        templates:
+          - "SSL certificate validation failed for client connection. Certificate expired on: {date}"
+          - "Authentication service crashed. Core dump generated at: /var/crash/auth-{timestamp}.dump"
+          - "Critical: LDAP server unreachable. All authentication attempts failing"
+          - "Fatal: JWT signing key not found. Unable to issue tokens"
+        attributes:
+          date: ["2026-03-01", "2026-02-15", "2026-01-30"]
+          timestamp: [1710158625, 1710158626]
+
+      - level: "ERROR"
+        weight: 10
+        templates:
+          - "HTTP 500: Token validation failed. Invalid signature for token: {token_id}"
+          - "HTTP 500: LDAP connection failed. Server unreachable: ldap.suse.internal:389"
+          - "HTTP 500: Failed to generate token. Encryption error"
+          - "HTTP 500: User lookup failed. Database connection timeout"
+          - "HTTP 500: OAuth callback failed. Invalid state parameter"
+        attributes:
+          token_id: ["tok_abc123", "tok_xyz789", "tok_def456"]
+
+      - level: "WARN"
+        weight: 10
+        templates:
+          - "Failed login attempt from IP: {ip}. Username: {username}. Attempt: {attempt}/5"
+          - "Token expiring soon for user: {user}. Expires in: {minutes} minutes"
+          - "Suspicious activity detected from IP: {ip}. Multiple failed logins"
+          - "Password complexity requirements not met for user: {user}"
+        attributes:
+          ip: ["203.0.113.45", "198.51.100.23", "192.0.2.100"]
+          username: ["admin", "operator", "guest"]
+          attempt: [1, 2, 3, 4]
+          user: ["admin@suse.com", "operator@suse.com", "user@suse.com"]
+          minutes: [5, 10, 15]
+
+      - level: "INFO"
+        weight: 75
+        templates:
+          - "User authenticated successfully. User: {user}. Method: {method}"
+          - "Token issued. User: {user}. Expires in: 3600s"
+          - "User logged out. User: {user}. Session duration: {duration}s"
+          - "Password changed successfully for user: {user}"
+          - "Two-factor authentication enabled for user: {user}"
+        attributes:
+          user: ["admin@suse.com", "operator@suse.com", "service_account", "user@suse.com"]
+          method: ["password", "oauth", "saml", "api_key"]
+          duration: [300, 600, 1800, 3600]
